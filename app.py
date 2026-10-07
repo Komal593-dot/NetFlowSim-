@@ -378,7 +378,7 @@ def draw_interactive_topology(network, active_path=None):
             x0, y0 = pos[u]
             x1, y1 = pos[v]
             path_x.extend([x0, x1, None])
-            path_y.extend([y0, y1, None])
+            path_y.extend([path_y[0] if path_y else y0, y1, None]) if False else path_y.extend([y0, y1, None])
 
         path_trace = go.Scatter(
             x=path_x, y=path_y,
@@ -402,7 +402,7 @@ def draw_interactive_topology(network, active_path=None):
     return fig
 
 
-# CLI TERMINAL RENDERER
+# CLI TERMINAL RENDERER WITH FAST INSTANT CALLBACK
 def render_cli_terminal():
     st.subheader("Router Console & Event Stream")
     logs_formatted = ""
@@ -419,19 +419,28 @@ def render_cli_terminal():
     
     st.markdown(f'<div class="cli-terminal">{logs_formatted}</div>', unsafe_allow_html=True)
 
-    cli_cmd = st.text_input("Console Input Prompt", placeholder="Type command (e.g., 'show status', 'ping Router2', 'clear logs')...", label_visibility="collapsed")
-    if cli_cmd:
-        cmd_clean = cli_cmd.strip().lower()
-        if cmd_clean == "clear logs":
-            st.session_state.cli_logs = ["[00:00:00] INFO  [Console] Terminal log stream cleared."]
-        elif "ping" in cmd_clean:
-            target = cmd_clean.split(" ")[-1].capitalize()
-            add_cli_log("EXEC ", f"[ICMP] Ping echo request sent to {target} -> 64 bytes, RTT = 12ms (0% loss)")
-        elif "status" in cmd_clean:
-            add_cli_log("INFO ", f"[NOC] Active Nodes: {len(nm.get_nodes())} | Core Links: {len(nm.get_links())} | Status: NOMINAL")
-        else:
-            add_cli_log("EXEC ", f"[Console] Command executed: '{cli_cmd}' -> Status OK.")
-        st.rerun()
+    def process_cli():
+        cli_cmd = st.session_state.get("cli_input_key", "").strip()
+        if cli_cmd:
+            cmd_clean = cli_cmd.lower()
+            if cmd_clean == "clear logs":
+                st.session_state.cli_logs = ["[00:00:00] INFO  [Console] Terminal log stream cleared."]
+            elif "ping" in cmd_clean:
+                target = cli_cmd.split(" ")[-1].capitalize()
+                add_cli_log("EXEC ", f"[ICMP] Ping echo request sent to {target} -> 64 bytes, RTT = 12ms (0% loss)")
+            elif "status" in cmd_clean:
+                add_cli_log("INFO ", f"[NOC] Active Nodes: {len(nm.get_nodes())} | Core Links: {len(nm.get_links())} | Status: NOMINAL")
+            else:
+                add_cli_log("EXEC ", f"[Console] Command executed: '{cli_cmd}' -> Status OK.")
+            st.session_state["cli_input_key"] = ""
+
+    st.text_input(
+        "Console Input Prompt",
+        placeholder="Type command (e.g., 'show status', 'ping Router2', 'clear logs') and press Enter...",
+        key="cli_input_key",
+        on_change=process_cli,
+        label_visibility="collapsed"
+    )
 
 
 active_tab = st.session_state.active_tab
